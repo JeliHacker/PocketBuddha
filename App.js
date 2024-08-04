@@ -3,85 +3,91 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
 
-// Main App Component
 const App = () => {
-  // State for meditation status and timer
   const [isMeditating, setIsMeditating] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
+  const [sound, setSound] = useState(null); // Sound object for the gong
+  const [music, setMusic] = useState(null); // Sound object for background music
+  const intervalRef = useRef(null); // Reference to the timer interval
 
-  // Reference for interval control
-  const intervalRef = useRef(null);
-
-  // Sound object
-  const [sound, setSound] = useState();
-
-  // Function to play sound
+  // Function to play a sound file
   const playSound = async (file) => {
-    print("playSound");
-    const { sound } = await Audio.Sound.createAsync(
-      require('./assets/gong.mp3') // Replace with your gong sound file
-    );
-    setSound(sound);
-    await sound.playAsync();
-    print("sound.playAysnc()");
+    try {
+      const { sound } = await Audio.Sound.createAsync(file);
+      setSound(sound);
+      await sound.playAsync();
+    } catch (error) {
+      console.log('Error playing sound:', error);
+    }
   };
 
-  // Function to start meditation
+  // Function to start the meditation session
   const startMeditation = async () => {
+    // Clear existing interval if any
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
     // Play starting gong sound
-    await playSound('./assets/gong.mp3');
+    await playSound(require('./assets/gong.mp3'));
 
-    // Start the meditation timer
-    setIsMeditating(true);
+    // Start playing background music
+    try {
+      const { sound: musicSound } = await Audio.Sound.createAsync(
+        require('./assets/meditation_music.mp3'), // Correct file path
+        { shouldPlay: true, isLooping: true } // Options to autoplay and loop the music
+      );
+      setMusic(musicSound);
+    } catch (error) {
+      console.log('Error playing music:', error);
+    }
 
-    // Start background music
-    const { sound: music } = await Audio.Sound.createAsync(
-      require('./assets/meditation_music.mp3') // Replace with your music file
-    );
-    await music.playAsync();
-    
-    setSound(music);
+    setIsMeditating(true); // Set meditation state to true
 
     // Set up countdown timer
     intervalRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev === 1) {
-          clearInterval(intervalRef.current); // Clear interval when time is up
+          clearInterval(intervalRef.current); // Stop timer at the end
           playSound('./assets/gong.mp3'); // Play ending gong sound
-          setIsMeditating(false); // Reset meditation status
+          if (music) {
+            music.stopAsync(); // Stop music
+          }
+          setIsMeditating(false); // Reset meditation state
           return 600; // Reset timer to 10 minutes
         }
-        return prev - 1;
+        return prev - 1; // Decrease timer
       });
     }, 1000);
   };
 
-  // Function to restart meditation
+  // Function to restart the meditation session
   const restartMeditation = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current); // Clear existing interval
-    }
-    setTimeLeft(600); // Reset timer
-    startMeditation(); // Start meditation again
+    setTimeLeft(600); // Reset the timer
+    startMeditation(); // Start the meditation session again
   };
 
-  // Clean up sound when component unmounts
+  // Clean up sound objects on component unmount
   useEffect(() => {
     return () => {
       if (sound) {
-        sound.unloadAsync(); // Unload sound
+        sound.unloadAsync(); // Unload gong sound
       }
+      if (music) {
+        music.unloadAsync(); // Unload music sound
+      }
+      clearInterval(intervalRef.current); // Clear interval on unmount
     };
-  }, [sound]);
+  }, [sound, music]);
 
-  // Format time for display
+  // Format the timer for display
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Render UI components
+  // Render the UI components
   return (
     <View style={styles.container}>
       {!isMeditating ? (
@@ -108,15 +114,6 @@ const styles = StyleSheet.create({
     fontSize: 48,
     marginVertical: 20,
     color: '#333',
-  },
-  button: {
-    backgroundColor: '#6200ee',
-    padding: 10,
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 20,
   },
 });
 
