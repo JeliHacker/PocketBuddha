@@ -6,18 +6,21 @@ import { Audio } from 'expo-av';
 const App = () => {
   const [isMeditating, setIsMeditating] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
-  const [sound, setSound] = useState(null); // Sound object for the gong
-  const [music, setMusic] = useState(null); // Sound object for background music
   const intervalRef = useRef(null); // Reference to the timer interval
 
-  // Function to play a sound file
-  const playSound = async (file) => {
+  // Initialize sound objects as null
+  const [sound, setSound] = useState(null); // Sound object for the gong
+  const [music, setMusic] = useState(null); // Sound object for background music
+
+  // Function to load and play a sound file
+  const playSound = async (filePath) => {
     try {
-      const { sound } = await Audio.Sound.createAsync(file);
-      setSound(sound);
+      const { sound } = await Audio.Sound.createAsync(filePath);
       await sound.playAsync();
+      return sound;
     } catch (error) {
       console.log('Error playing sound:', error);
+      return null;
     }
   };
 
@@ -29,15 +32,17 @@ const App = () => {
     }
 
     // Play starting gong sound
-    await playSound(require('./assets/gong.mp3'));
+    const gongSound = await playSound(require('./assets/gong.mp3'));
+    setSound(gongSound); // Save the gong sound object to state
 
+    let musicfilePath = require('./assets/meditation_music.mp3');
     // Start playing background music
     try {
       const { sound: musicSound } = await Audio.Sound.createAsync(
-        require('./assets/meditation_music.mp3'), // Correct file path
+        musicfilePath, // Correct file path
         { shouldPlay: true, isLooping: true } // Options to autoplay and loop the music
       );
-      setMusic(musicSound);
+      setMusic(musicSound); // Save the music sound object to state
     } catch (error) {
       console.log('Error playing music:', error);
     }
@@ -49,16 +54,34 @@ const App = () => {
       setTimeLeft((prev) => {
         if (prev === 1) {
           clearInterval(intervalRef.current); // Stop timer at the end
-          playSound('./assets/gong.mp3'); // Play ending gong sound
-          if (music) {
-            music.stopAsync(); // Stop music
-          }
-          setIsMeditating(false); // Reset meditation state
+          handleMeditationEnd(); // Handle meditation end logic
           return 600; // Reset timer to 10 minutes
         }
         return prev - 1; // Decrease timer
       });
     }, 1000);
+  };
+
+  // Function to handle the end of meditation
+  const handleMeditationEnd = async () => {
+    // Play ending gong sound
+    const gongSound = await playSound(require('./assets/gong.mp3'));
+
+    // Stop music if it's playing
+    if (music) {
+      try {
+        await music.stopAsync();
+        await music.unloadAsync();
+      } catch (error) {
+        console.log('Error stopping music:', error);
+      } 
+      setMusic(null); // Reset the music state
+    } else {
+      console.log("no music detected", music, typeof music);
+    }
+
+    // Reset meditation state
+    setIsMeditating(false);
   };
 
   // Function to restart the meditation session
