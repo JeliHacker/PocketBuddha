@@ -1,10 +1,10 @@
-// App.js
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
 
 const App = () => {
   const [isMeditating, setIsMeditating] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [timeLeft, setTimeLeft] = useState(600); // 10 minutes in seconds
   const intervalRef = useRef(null); // Reference to the timer interval
 
@@ -48,6 +48,7 @@ const App = () => {
     }
 
     setIsMeditating(true); // Set meditation state to true
+    setIsPaused(false); // Ensure the meditation is not paused
 
     // Set up countdown timer
     intervalRef.current = setInterval(() => {
@@ -65,7 +66,7 @@ const App = () => {
   // Function to handle the end of meditation
   const handleMeditationEnd = async () => {
     // Play ending gong sound
-    const gongSound = await playSound(require('./assets/gong.mp3'));
+    await playSound(require('./assets/gong.mp3'));
 
     // Stop music if it's playing
     if (music) {
@@ -74,7 +75,7 @@ const App = () => {
         await music.unloadAsync();
       } catch (error) {
         console.log('Error stopping music:', error);
-      } 
+      }
       setMusic(null); // Reset the music state
     } else {
       console.log("no music detected", music, typeof music);
@@ -82,12 +83,46 @@ const App = () => {
 
     // Reset meditation state
     setIsMeditating(false);
+    setIsPaused(false); // Ensure paused state is reset
   };
 
   // Function to restart the meditation session
   const restartMeditation = () => {
     setTimeLeft(600); // Reset the timer
     startMeditation(); // Start the meditation session again
+  };
+
+  // Function to pause the meditation session
+  const pauseMeditation = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current); // Stop the timer
+    }
+    if (music) {
+      music.pauseAsync(); // Pause the music
+    }
+    setIsPaused(true); // Set paused state to true
+  };
+
+  // Function to resume the meditation session
+  const resumeMeditation = () => {
+    setIsPaused(false); // Reset paused state
+
+    // Resume playing background music
+    if (music) {
+      music.playAsync();
+    }
+
+    // Resume countdown timer
+    intervalRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev === 1) {
+          clearInterval(intervalRef.current); // Stop timer at the end
+          handleMeditationEnd(); // Handle meditation end logic
+          return 600; // Reset timer to 10 minutes
+        }
+        return prev - 1; // Decrease timer
+      });
+    }, 1000);
   };
 
   // Clean up sound objects on component unmount
@@ -118,7 +153,14 @@ const App = () => {
       ) : (
         <>
           <Text style={styles.timer}>{formatTime(timeLeft)}</Text>
-          <Button title="Restart" onPress={restartMeditation} />
+          {!isPaused ? (
+            <Button title="Pause" onPress={pauseMeditation} />
+          ) : (
+            <>
+              <Button title="Resume" onPress={resumeMeditation} />
+              <Button title="Restart" onPress={restartMeditation} />
+            </>
+          )}
         </>
       )}
     </View>
